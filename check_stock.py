@@ -1,6 +1,6 @@
 """
-Myntra stock watcher for H&M Loose Fit Zip-Through Hoodie (size S).
-Pings Telegram when size S flips to in-stock.
+Myntra stock watcher for H&M Loose Fit Zip-Through Hoodie.
+Pings Telegram when target size flips to in-stock.
 Supports Scrape.do / ScraperAPI proxies for cloud runners (bypasses Akamai & geo-blocks).
 """
 import os
@@ -13,7 +13,9 @@ import urllib.request
 import urllib.parse
 
 STYLE_ID = "35714533"
-TARGET_SIZE = "S"
+# Set to "M" for testing alert since M is currently in stock.
+# Can be overridden via TARGET_SIZE environment variable.
+TARGET_SIZE = os.environ.get("TARGET_SIZE", "M").strip().upper()
 PRODUCT_URL = (
     "https://www.myntra.com/mailers/sweatshirts/h&m/"
     "h&m-loose-fit-zip-through-hoodie/35714533/buy"
@@ -34,14 +36,14 @@ UA = (
 )
 
 HYPE_LINES = [
-    "The hoodie gods have spoken. Size S just materialized.",
-    "Breaking: your future drip is now in stock.",
-    "Fabric alert! Size S of that H&M zip-through just loaded in.",
-    "Stop scrolling. Start checkout. Size S is HERE.",
-    "The black hoodie has entered the chat — size S available.",
-    "Heads up, legend — size S finally dropped back in.",
-    "The hoodie was hiding. The hoodie has returned.",
-    "Size S restock just happened. Fingers go brrr on checkout.",
+    "The hoodie gods have spoken. Size {size} just materialized.",
+    "Breaking: your future drip is now in stock in size {size}.",
+    "Fabric alert! Size {size} of that H&M zip-through just loaded in.",
+    "Stop scrolling. Start checkout. Size {size} is HERE.",
+    "The black hoodie has entered the chat — size {size} available.",
+    "Heads up, legend — size {size} finally dropped back in.",
+    "The hoodie was hiding. The hoodie has returned (Size {size}).",
+    "Size {size} restock just happened. Fingers go brrr on checkout.",
 ]
 
 
@@ -165,6 +167,8 @@ def main():
         else:
             print("No proxy configured — making direct connection.")
 
+        print(f"Checking availability for Target Size: {TARGET_SIZE}")
+
         try:
             pdp = fetch_product_json()
         except Exception as e:
@@ -177,7 +181,7 @@ def main():
         target = next((a for (lab, a) in sizes if lab == TARGET_SIZE), None)
 
         if target is True:
-            hype = random.choice(HYPE_LINES)
+            hype = random.choice(HYPE_LINES).format(size=TARGET_SIZE)
             msg = (
                 f"\U0001F6A8 <b>{hype}</b>\n\n"
                 f"<b>H&amp;M Loose Fit Zip-Through Hoodie</b>\n"
@@ -186,7 +190,7 @@ def main():
                 f"<i>Move fast — restocks disappear quicker than your paycheck.</i>"
             )
             send_telegram(msg)
-            print("ALERT SENT.")
+            print(f"ALERT SENT FOR SIZE {TARGET_SIZE}!")
         elif target is False:
             print(f"Size {TARGET_SIZE} still out of stock.")
         else:
