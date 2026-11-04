@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 import check_stock
 
-INTERVAL_SECONDS = 600  # 10 minutes
+INTERVAL_SECONDS = 1500  # 25 minutes
 
 
 def main():
@@ -48,3 +48,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nWatcher stopped by user.")
         sys.exit(0)
+

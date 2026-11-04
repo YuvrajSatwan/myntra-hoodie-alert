@@ -2,7 +2,7 @@ name: Myntra Hoodie Stock Watch
 
 on:
   schedule:
-    - cron: "*/45 * * * *"   # every 45 minutes (~960 runs/month, fits within free proxy limits)
+    - cron: "*/25 * * * *"   # every 25 minutes
   workflow_dispatch:          # lets you run manually from Actions tab
   push:                       # runs on git push to verify code changes
 
