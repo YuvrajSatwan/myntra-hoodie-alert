@@ -1,6 +1,7 @@
 """
 Myntra stock watcher for H&M Loose Fit Zip-Through Hoodie (size S).
 Pings Telegram when size S flips to in-stock.
+Supports Scrape.do / ScraperAPI proxies for cloud runners (bypasses Akamai & geo-blocks).
 """
 import os
 import re
@@ -23,6 +24,9 @@ TELEGRAM_TOKEN = os.environ.get(
 ).strip()
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "8800631140").strip()
 
+SCRAPE_DO_TOKEN = os.environ.get("SCRAPE_DO_TOKEN", "").strip()
+SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY", "").strip()
+
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -41,6 +45,17 @@ HYPE_LINES = [
 ]
 
 
+def build_proxy_url(target_url):
+    """If proxy token is present, route through India residential proxy."""
+    if SCRAPE_DO_TOKEN:
+        encoded = urllib.parse.quote(target_url, safe="")
+        return f"https://api.scrape.do/?token={SCRAPE_DO_TOKEN}&url={encoded}&geo=in"
+    if SCRAPER_API_KEY:
+        encoded = urllib.parse.quote(target_url, safe="")
+        return f"https://api.scraperapi.com?api_key={SCRAPER_API_KEY}&url={encoded}&country_code=in"
+    return target_url
+
+
 def _read_response(resp):
     raw = resp.read()
     if resp.info().get("Content-Encoding") == "gzip" or (len(raw) > 2 and raw[:2] == b"\x1f\x8b"):
@@ -50,7 +65,8 @@ def _read_response(resp):
 
 def fetch_product_json():
     """Hit Myntra's public PDP gateway endpoint for this styleId."""
-    url = f"https://www.myntra.com/gateway/v2/product/{STYLE_ID}"
+    target = f"https://www.myntra.com/gateway/v2/product/{STYLE_ID}"
+    url = build_proxy_url(target)
     req = urllib.request.Request(
         url,
         headers={
@@ -60,22 +76,23 @@ def fetch_product_json():
             "Referer": PRODUCT_URL,
         },
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=45) as resp:
         content = _read_response(resp)
         return json.loads(content)
 
 
 def fetch_from_html():
     """Fallback: scrape pdpData blob from the product HTML page."""
+    url = build_proxy_url(PRODUCT_URL)
     req = urllib.request.Request(
-        PRODUCT_URL,
+        url,
         headers={
             "User-Agent": UA,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
         },
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=45) as resp:
         html = _read_response(resp)
 
     # 1. Look for window.__myx = {...}
@@ -100,7 +117,7 @@ def fetch_from_html():
         except Exception as e:
             print(f"JSON raw_decode on pdpData failed: {e}")
 
-    # If neither matched, print a diagnostic snippet to help debugging
+    # Diagnostic snippet
     snippet = html[:300].replace("\n", " ")
     raise RuntimeError(f"Could not find product data in HTML. Page snippet: {snippet}")
 
@@ -141,6 +158,13 @@ def send_telegram(text):
 
 def main():
     try:
+        if SCRAPE_DO_TOKEN:
+            print("Using Scrape.do proxy with Indian geolocation (geo=in).")
+        elif SCRAPER_API_KEY:
+            print("Using ScraperAPI proxy with Indian geolocation (country_code=in).")
+        else:
+            print("No proxy configured — making direct connection.")
+
         try:
             pdp = fetch_product_json()
         except Exception as e:
@@ -169,7 +193,6 @@ def main():
             print(f"Size {TARGET_SIZE} not listed at all — maybe discontinued.")
     except Exception as e:
         print(f"Check failed: {e}", file=sys.stderr)
-        # non-zero so GH Actions flags it, but don't spam telegram on scraper errors
         sys.exit(1)
 
 

@@ -2,7 +2,7 @@ name: Myntra Hoodie Stock Watch
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes (UTC)
+    - cron: "*/45 * * * *"   # every 45 minutes (~960 runs/month, fits within free proxy limits)
   workflow_dispatch:          # lets you run manually from Actions tab
   push:                       # runs on git push to verify code changes
 
@@ -20,4 +20,6 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          SCRAPE_DO_TOKEN:    ${{ secrets.SCRAPE_DO_TOKEN }}
+          SCRAPER_API_KEY:    ${{ secrets.SCRAPER_API_KEY }}
         run: python check_stock.py
