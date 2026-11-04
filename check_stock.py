@@ -5,6 +5,7 @@ Pings Telegram when size S flips to in-stock.
 import os
 import re
 import json
+import gzip
 import random
 import sys
 import urllib.request
@@ -17,8 +18,10 @@ PRODUCT_URL = (
     "h&m-loose-fit-zip-through-hoodie/35714533/buy"
 )
 
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+TELEGRAM_TOKEN = os.environ.get(
+    "TELEGRAM_BOT_TOKEN", "9173194946:AAG62z1bMRSUOzNooAl1QZM9xpWVpdncRlg"
+).strip()
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "8800631140").strip()
 
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -38,6 +41,13 @@ HYPE_LINES = [
 ]
 
 
+def _read_response(resp):
+    raw = resp.read()
+    if resp.info().get("Content-Encoding") == "gzip" or (len(raw) > 2 and raw[:2] == b"\x1f\x8b"):
+        raw = gzip.decompress(raw)
+    return raw.decode("utf-8", errors="ignore")
+
+
 def fetch_product_json():
     """Hit Myntra's public PDP gateway endpoint for this styleId."""
     url = f"https://www.myntra.com/gateway/v2/product/{STYLE_ID}"
@@ -51,7 +61,8 @@ def fetch_product_json():
         },
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        content = _read_response(resp)
+        return json.loads(content)
 
 
 def fetch_from_html():
@@ -60,20 +71,38 @@ def fetch_from_html():
         PRODUCT_URL,
         headers={
             "User-Agent": UA,
-            "Accept": "text/html,application/xhtml+xml",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
         },
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
-        html = resp.read().decode("utf-8", errors="ignore")
-    m = re.search(r'"pdpData"\s*:\s*({.*?})\s*,\s*"meta"', html, re.DOTALL)
-    if not m:
-        m = re.search(r"window\.__myx\s*=\s*({.*?});\s*</script>", html, re.DOTALL)
-        if not m:
-            raise RuntimeError("Could not find product data in HTML.")
-        blob = json.loads(m.group(1))
-        return blob.get("pdpData", blob)
-    return json.loads(m.group(1))
+        html = _read_response(resp)
+
+    # 1. Look for window.__myx = {...}
+    match = re.search(r"window\.__myx\s*=\s*", html)
+    if match:
+        decoder = json.JSONDecoder()
+        try:
+            blob, _ = decoder.raw_decode(html[match.end():])
+            if "pdpData" in blob:
+                return blob["pdpData"]
+            return blob
+        except Exception as e:
+            print(f"JSON raw_decode on window.__myx failed: {e}")
+
+    # 2. Look for "pdpData":{...}
+    match = re.search(r'"pdpData"\s*:\s*', html)
+    if match:
+        decoder = json.JSONDecoder()
+        try:
+            pdp, _ = decoder.raw_decode(html[match.end():])
+            return pdp
+        except Exception as e:
+            print(f"JSON raw_decode on pdpData failed: {e}")
+
+    # If neither matched, print a diagnostic snippet to help debugging
+    snippet = html[:300].replace("\n", " ")
+    raise RuntimeError(f"Could not find product data in HTML. Page snippet: {snippet}")
 
 
 def extract_sizes(pdp):

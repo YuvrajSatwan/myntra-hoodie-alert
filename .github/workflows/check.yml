@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: "*/30 * * * *"   # every 30 minutes (UTC)
   workflow_dispatch:          # lets you run manually from Actions tab
+  push:                       # runs on git push to verify code changes
 
 jobs:
   check:
