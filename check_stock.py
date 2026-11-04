@@ -13,9 +13,7 @@ import urllib.request
 import urllib.parse
 
 STYLE_ID = "35714533"
-# Set to "M" for testing alert since M is currently in stock.
-# Can be overridden via TARGET_SIZE environment variable.
-TARGET_SIZE = os.environ.get("TARGET_SIZE", "M").strip().upper()
+TARGET_SIZE = os.environ.get("TARGET_SIZE", "S").strip().upper()
 PRODUCT_URL = (
     "https://www.myntra.com/mailers/sweatshirts/h&m/"
     "h&m-loose-fit-zip-through-hoodie/35714533/buy"
